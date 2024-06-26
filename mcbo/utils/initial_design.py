@@ -52,7 +52,7 @@ def generate_initial_design(
     env_profile: dict,
 ):
     r"""
-    Outputs an initial expoloratory X.
+    Outputs an initial exploratory X.
     """
     if env_profile["interventional"]:
         X = generate_initial_design_causal(algo_profile, env_profile)

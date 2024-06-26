@@ -7,7 +7,7 @@ acquisition functions.
 
 from __future__ import annotations
 import torch
-from typing import Any
+from typing import Any, Callable, List, Optional
 from botorch.models.model import Model
 from botorch.models import FixedNoiseGP
 from botorch import fit_gpytorch_model
@@ -280,6 +280,10 @@ class MultivariateNormalNetwork(Posterior):
         shape[-1] = self.env_profile["dag"].get_n_nodes()
         shape = torch.Size(shape)
         return shape
+    
+    @property
+    def base_sample_shape(self) -> torch.Size:
+        return torch.Size([self.env_profile["dag"].get_n_nodes()])
 
     def _create_nodes_sample_tensor(self, sample_shape):
         r"""
@@ -415,7 +419,7 @@ class MultivariateNormalNetwork(Posterior):
                             )
                         )[..., 0]
                     else:
-                        print(error)
+                        print("error")
                 else:
                     nodes_samples[..., k] = multivariate_normal_at_node_k.rsample()[
                         0, ..., 0

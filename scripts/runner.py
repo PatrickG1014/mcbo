@@ -102,7 +102,7 @@ def function_network(X: Tensor):
 
 
 # Function that maps the network output to the objective value
-network_to_objective_transform = lambda Y: Y[..., -1]
+network_to_objective_transform = lambda Y, X: Y[..., -1]
 network_to_objective_transform = GenericMCObjective(network_to_objective_transform)
 if noise_scale > 0.001:
     batch_size = wandb.config["batch_size"]

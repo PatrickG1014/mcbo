@@ -11,7 +11,7 @@ from botorch.acquisition import (
     qSimpleRegret,
 )
 from botorch.acquisition import PosteriorMean as GPPosteriorMean
-from botorch.sampling.samplers import SobolQMCNormalSampler
+from botorch.sampling import SobolQMCNormalSampler
 
 from torch import Tensor
 from typing import Callable, List, Optional
@@ -20,7 +20,7 @@ from mcbo.acquisition_function_optimization.optimize_acqf import (
     optimize_acqf_and_get_suggested_point,
 )
 from mcbo.utils.dag import DAG
-from mcbo.utils.initial_design import generate_initial_design
+from mcbo.utils.initial_design import generate_initial_design, random_causal
 from mcbo.utils.fit_gp_model import fit_gp_model
 from mcbo.models.gp_network import GaussianProcessNetwork
 from mcbo.utils.posterior_mean import PosteriorMean
@@ -31,7 +31,7 @@ def obj_mean(
     X: Tensor, function_network: Callable, network_to_objective_transform: Callable
 ) -> Tensor:
     '''
-    Estimates the mea value of a noisy objective by computing it a lot of times and 
+    Estimates the mean value of a noisy objective by computing it a lot of times and 
     averaging.
     '''
     X = X[None]  # create new 0th dim
@@ -224,7 +224,7 @@ def get_acq_fun(
         )
         posterior_mean_function = None
     elif algo == "MCBO":
-        qmc_sampler = SobolQMCNormalSampler(num_samples=128)
+        qmc_sampler = SobolQMCNormalSampler(sample_shape=torch.Size([128]))
         # Acquisition function
         acquisition_function = qSimpleRegret(
             model=model,
@@ -242,7 +242,7 @@ def get_new_suggested_point_random(env_profile) -> Tensor:
     if env_profile["interventional"]:
         # For interventional random = random targets, random values
         target = np.random.choice(env_profile["valid_targets"])
-        return mcbo.utils.initial_design.random_causal(target, env_profile), None
+        return random_causal(target, env_profile), None
     else:
         return torch.rand([1, env_profile["input_dim"]]), None
 
