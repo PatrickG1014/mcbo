@@ -241,7 +241,8 @@ def get_new_suggested_point_random(env_profile) -> Tensor:
     r"""Returns a new suggested point randomly."""
     if env_profile["interventional"]:
         # For interventional random = random targets, random values
-        target = np.random.choice(env_profile["valid_targets"])
+        valid_targets_index = range(len(env_profile["valid_targets"]))
+        target = env_profile["valid_targets"][np.random.choice(valid_targets_index)]
         return random_causal(target, env_profile), None
     else:
         return torch.rand([1, env_profile["input_dim"]]), None
