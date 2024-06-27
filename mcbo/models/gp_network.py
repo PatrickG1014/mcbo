@@ -7,7 +7,7 @@ acquisition functions.
 
 from __future__ import annotations
 import torch
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 from botorch.models.model import Model
 from botorch.models import FixedNoiseGP
 from botorch import fit_gpytorch_model
@@ -284,6 +284,10 @@ class MultivariateNormalNetwork(Posterior):
     @property
     def base_sample_shape(self) -> torch.Size:
         return torch.Size([self.env_profile["dag"].get_n_nodes()])
+    
+    @property
+    def batch_range(self) -> Tuple[int, int]:
+        return (0, self.X.shape[0])
 
     def _create_nodes_sample_tensor(self, sample_shape):
         r"""
@@ -539,6 +543,72 @@ class HallucinatedGaussianProcessNetwork(MultivariateNormalNetwork):
             expects base_sample as an argument.
         """
 
+        nodes_samples, nodes_samples_available = self._create_nodes_sample_tensor(
+            sample_shape
+        )
+        active_input_indices = self.env_profile["active_input_indices"]
+
+        def sample_root_node(k):
+            X_node_k = self._get_X_node_k(k, True, nodes_samples, sample_shape)
+            multivariate_normal_at_node_k = self._construct_GP_k(X_node_k, k)
+
+            nodes_samples[..., k] = self._get_hallucinated_node_sample(
+                k, multivariate_normal_at_node_k, True, nodes_samples
+            )
+
+        def sample_nonroot_node(k):
+            parent_nodes = self.env_profile["dag"].get_parent_nodes(k)
+            # Check that values of all parents are already computed.
+            if not nodes_samples_available[k] and all(
+                [nodes_samples_available[j] for j in parent_nodes]
+            ):
+                X_node_k = self._get_X_node_k(k, False, nodes_samples, sample_shape)
+                multivariate_normal_at_node_k = self._construct_GP_k(X_node_k, k)
+
+                nodes_samples[..., k] = self._get_hallucinated_node_sample(
+                    k, multivariate_normal_at_node_k, False, nodes_samples
+                )
+
+        for k in self.env_profile["dag"].get_root_nodes():
+            if self.target[k] == 1:
+                nodes_samples[..., k] = self._do_intervention_batch(k, nodes_samples)
+            else:
+                sample_root_node(k)
+            nodes_samples_available[k] = True
+
+        while not all(nodes_samples_available):
+            for k in range(self.env_profile["dag"].get_n_nodes()):
+                if self.target[k] == 1:
+                    nodes_samples[..., k] = self._do_intervention_batch(
+                        k, nodes_samples
+                    )
+                else:
+                    sample_nonroot_node(k)
+                nodes_samples_available[k] = True
+
+        return nodes_samples
+    
+    def rsample_from_base_samples(
+        self,
+        sample_shape: torch.Size,
+        base_samples: Tensor,
+    ) -> Tensor:
+        r"""Sample from the posterior (with gradients) using base samples.
+
+        This is intended to be used with a sampler that produces the corresponding base
+        samples, and enables acquisition optimization via Sample Average Approximation.
+
+        Args:
+            sample_shape: A `torch.Size` object specifying the sample shape. To
+                draw `n` samples, set to `torch.Size([n])`. To draw `b` batches
+                of `n` samples each, set to `torch.Size([b, n])`.
+            base_samples: The base samples, obtained from the appropriate sampler.
+                This is a tensor of shape `sample_shape x base_sample_shape`.
+
+        Returns:
+            Samples from the posterior, a tensor of shape
+            `self._extended_shape(sample_shape=sample_shape)`.
+        """
         nodes_samples, nodes_samples_available = self._create_nodes_sample_tensor(
             sample_shape
         )
